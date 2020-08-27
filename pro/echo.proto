@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package pro;
+
+message Request { string message = 1; };
+message Response { string message = 1; };
+
+service Echo { rpc Say(Request) returns (Response); }
