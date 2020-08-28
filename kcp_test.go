@@ -39,7 +39,7 @@ func init() {
 }
 
 func makeHost(port int) (host.Host, error) {
-	prikey, _, err := crypto.GenerateKeyPair(crypto.Ed25519, 2048)
+	prikey, _, err := crypto.GenerateKeyPair(crypto.ECDSA, 2048)
 
 	if err != nil {
 		return nil, err
