@@ -4,6 +4,7 @@ go 1.14
 
 require (
 	github.com/golang/protobuf v1.4.2
+	github.com/ipfs/go-log v1.0.4
 	github.com/klauspost/reedsolomon v1.9.9 // indirect
 	github.com/libp2p/go-libp2p v0.11.0
 	github.com/libp2p/go-libp2p-core v0.6.1

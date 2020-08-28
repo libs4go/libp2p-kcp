@@ -6,6 +6,7 @@ import (
 	"net"
 	"testing"
 
+	ipfslog "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
@@ -36,6 +37,8 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+
+	ipfslog.SetAllLoggers(ipfslog.LevelError)
 }
 
 func makeHost(port int) (host.Host, error) {

@@ -375,8 +375,30 @@ func (l *kcpListener) Accept() (transport.CapableConn, error) {
 
 		l.transport.D("accept connection {@raddr}", sess.RemoteAddr())
 
+		var remotePeer peer.ID
+
 		if l.tlsConf != nil {
-			sess = tls.Server(sess, l.tlsConf)
+			tlsSess := tls.Server(sess, l.tlsConf)
+
+			err := tlsSess.Handshake()
+
+			if err != nil {
+				return nil, err
+			}
+
+			remotePubKey, err := tlsp2p.PubKeyFromCertChain(tlsSess.ConnectionState().PeerCertificates)
+
+			if err != nil {
+				return nil, err
+			}
+
+			remotePeer, err = peer.IDFromPublicKey(remotePubKey)
+
+			if err != nil {
+				return nil, err
+			}
+
+			sess = tlsSess
 		}
 
 		remoteMultiaddr, err := toKcpMultiaddr(sess.RemoteAddr())
@@ -399,6 +421,7 @@ func (l *kcpListener) Accept() (transport.CapableConn, error) {
 			localPeer:       l.transport.localPeer,
 			privKey:         l.transport.privKey,
 			session:         smuxSession,
+			remotePeerID:    remotePeer,
 		}, nil
 	}
 }
