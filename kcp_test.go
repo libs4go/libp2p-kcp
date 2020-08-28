@@ -45,12 +45,18 @@ func makeHost(port int) (host.Host, error) {
 		return nil, err
 	}
 
+	kcp, err := New(prikey, WithTLS())
+
+	if err != nil {
+		return nil, err
+	}
+
 	opts := []libp2p.Option{
 		libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/udp/%d/kcp", port)),
 		libp2p.Identity(prikey),
 		libp2p.DisableRelay(),
 		libp2p.ChainOptions(
-			libp2p.Transport(New),
+			libp2p.Transport(kcp),
 		),
 	}
 

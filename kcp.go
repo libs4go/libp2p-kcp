@@ -2,6 +2,7 @@ package kcp
 
 import (
 	"context"
+	"crypto/tls"
 	"net"
 	"time"
 
@@ -9,7 +10,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/mux"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/transport"
-	tls "github.com/libp2p/go-libp2p-tls"
+	tlsp2p "github.com/libp2p/go-libp2p-tls"
 	"github.com/libs4go/errors"
 	"github.com/libs4go/slf4go"
 	"github.com/multiformats/go-multiaddr"
@@ -26,6 +27,7 @@ var (
 	ErrInternal = errors.New("the internal error", errors.WithVendor(errVendor), errors.WithCode(-1))
 	ErrAddr     = errors.New("invalid libp2p net.addr", errors.WithVendor(errVendor), errors.WithCode(-2))
 	ErrClosed   = errors.New("transport closed", errors.WithVendor(errVendor), errors.WithCode(-3))
+	ErrTLS      = errors.New("expected remote pub key to be set", errors.WithVendor(errVendor), errors.WithCode(-4))
 )
 
 const protocolKCPID = 482
@@ -42,15 +44,33 @@ func init() {
 	}
 }
 
+// Option transport creation option
+type Option func(kcp *kcpTransport) error
+
+// WithTLS create kcp transport with TLS
+func WithTLS() Option {
+	return func(kcp *kcpTransport) error {
+		identity, err := tlsp2p.NewIdentity(kcp.privKey)
+
+		if err != nil {
+			return errors.Wrap(err, "generate identity from private key error")
+		}
+
+		kcp.identity = identity
+
+		return nil
+	}
+}
+
 type kcpTransport struct {
-	slf4go.Logger                // mixin logger
-	localPeer     peer.ID        // local peer.ID
-	privKey       crypto.PrivKey // local peer key
-	identity      *tls.Identity  //
+	slf4go.Logger                  // mixin logger
+	localPeer     peer.ID          // local peer.ID
+	privKey       crypto.PrivKey   // local peer key
+	identity      *tlsp2p.Identity //
 }
 
 // New create kcp transport
-func New(privkey crypto.PrivKey) (transport.Transport, error) {
+func New(privkey crypto.PrivKey, options ...Option) (transport.Transport, error) {
 
 	id, err := peer.IDFromPrivateKey(privkey)
 
@@ -58,10 +78,19 @@ func New(privkey crypto.PrivKey) (transport.Transport, error) {
 		return nil, errors.Wrap(err, "generate peer id  from private key error")
 	}
 
-	return &kcpTransport{
+	kcp := &kcpTransport{
 		Logger:    slf4go.Get("kcp-transport"),
 		localPeer: id,
-	}, nil
+		privKey:   privkey,
+	}
+
+	for _, option := range options {
+		if err := option(kcp); err != nil {
+			return nil, err
+		}
+	}
+
+	return kcp, nil
 }
 
 func smuxConf() (conf *smux.Config) {
@@ -74,6 +103,9 @@ func smuxConf() (conf *smux.Config) {
 
 func (kcp *kcpTransport) Dial(ctx context.Context, raddr multiaddr.Multiaddr, p peer.ID) (transport.CapableConn, error) {
 	kcp.I("dial to {@addr}", raddr)
+
+	var remotePubKey crypto.PubKey
+
 	network, host, err := manet.DialArgs(raddr)
 
 	if err != nil {
@@ -86,12 +118,34 @@ func (kcp *kcpTransport) Dial(ctx context.Context, raddr multiaddr.Multiaddr, p 
 		return nil, errors.Wrap(err, "resolve udp addr %s %s error", network, host)
 	}
 
-	// tlsConf, keyCh := kcp.identity.ConfigForPeer(p)
-
 	kcpConn, err := kcpgo.Dial(addr.String())
 
 	if err != nil {
 		return nil, errors.Wrap(err, "kcp dial to %s error", addr.String())
+	}
+
+	if kcp.identity != nil {
+		tlsConf, keyCh := kcp.identity.ConfigForPeer(p)
+
+		tlsConn := tls.Client(kcpConn, tlsConf)
+
+		// explicit call handshake
+		err = tlsConn.Handshake()
+
+		if err != nil {
+			return nil, errors.Wrap(err, "kcp dial to %s tls handshake error", addr.String())
+		}
+
+		select {
+		case remotePubKey = <-keyCh:
+		default:
+		}
+
+		if remotePubKey == nil {
+			return nil, errors.Wrap(ErrTLS, "connect to %s error", p.Pretty())
+		}
+
+		kcpConn = tlsConn
 	}
 
 	remoteMultiaddr, err := toKcpMultiaddr(addr)
@@ -121,6 +175,7 @@ func (kcp *kcpTransport) Dial(ctx context.Context, raddr multiaddr.Multiaddr, p 
 		localPeer:       kcp.localPeer,
 		privKey:         kcp.privKey,
 		session:         smuxSession,
+		remotePubKey:    remotePubKey,
 	}, nil
 }
 
@@ -152,13 +207,30 @@ func (kcp *kcpTransport) Listen(laddr multiaddr.Multiaddr) (transport.Listener, 
 		return nil, errors.Wrap(err, "listen %s error", addr.String())
 	}
 
-	return &kcpListener{
+	l := &kcpListener{
 		listener:       listener,
 		localMultiaddr: laddr,
 		transport:      kcp,
 		privKey:        kcp.privKey,
 		localPeer:      kcp.localPeer,
-	}, nil
+	}
+
+	if kcp.identity != nil {
+		var tlsConf tls.Config
+
+		tlsConf.GetConfigForClient = func(_ *tls.ClientHelloInfo) (*tls.Config, error) {
+			// return a tls.Config that verifies the peer's certificate chain.
+			// Note that since we have no way of associating an incoming QUIC connection with
+			// the peer ID calculated here, we don't actually receive the peer's public key
+			// from the key chan.
+			conf, _ := kcp.identity.ConfigForAny()
+			return conf, nil
+		}
+
+		l.tlsConf = &tlsConf
+	}
+
+	return l, nil
 }
 
 func (kcp *kcpTransport) Protocols() []int {
@@ -220,11 +292,15 @@ func (c *kcpCapableConn) IsClosed() bool {
 // OpenStream creates a new stream.
 func (c *kcpCapableConn) OpenStream() (mux.MuxedStream, error) {
 
+	c.kcp.D("open stream {@c} -- start", c.localPeer.Pretty())
+
 	stream, err := c.session.OpenStream()
 
 	if err != nil {
 		return nil, errors.Wrap(err, "open kcp smux session error")
 	}
+
+	c.kcp.D("open stream {@c} -- finish", c.localPeer.Pretty())
 
 	return &kcpStream{Stream: stream}, nil
 }
@@ -232,11 +308,15 @@ func (c *kcpCapableConn) OpenStream() (mux.MuxedStream, error) {
 // AcceptStream accepts a stream opened by the other side.
 func (c *kcpCapableConn) AcceptStream() (mux.MuxedStream, error) {
 
+	c.kcp.D("accept stream {@c} -- start", c.localPeer.Pretty())
+
 	stream, err := c.session.AcceptStream()
 
 	if err != nil {
 		return nil, errors.Wrap(err, "open kcp smux session error")
 	}
+
+	c.kcp.D("accept stream {@c} -- finish", c.localPeer.Pretty())
 
 	return &kcpStream{Stream: stream}, nil
 }
@@ -281,14 +361,22 @@ type kcpListener struct {
 	privKey        crypto.PrivKey
 	localPeer      peer.ID
 	localMultiaddr multiaddr.Multiaddr
+	tlsConf        *tls.Config
 }
 
 // Accept accepts new connections.
 func (l *kcpListener) Accept() (transport.CapableConn, error) {
 	for {
 		sess, err := l.listener.Accept()
+
 		if err != nil {
 			return nil, err
+		}
+
+		l.transport.D("accept connection {@raddr}", sess.RemoteAddr())
+
+		if l.tlsConf != nil {
+			sess = tls.Server(sess, l.tlsConf)
 		}
 
 		remoteMultiaddr, err := toKcpMultiaddr(sess.RemoteAddr())
@@ -297,7 +385,7 @@ func (l *kcpListener) Accept() (transport.CapableConn, error) {
 			return nil, errors.Wrap(err, "parse remote multiaddr error")
 		}
 
-		smuxSession, err := smux.Client(sess, smuxConf())
+		smuxSession, err := smux.Server(sess, smuxConf())
 
 		if err != nil {
 			return nil, errors.Wrap(err, "create kcp smux session error")
