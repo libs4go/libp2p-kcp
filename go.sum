@@ -344,10 +344,8 @@ github.com/libp2p/go-yamux v1.3.7/go.mod h1:fr7aVgmdNGJK+N1g+b6DW6VxzbRCjCOejR/h
 github.com/libs4go/errors v0.0.2/go.mod h1:WLoMlTxoWMR2mXpnDHQdJnan3WXtCaFZ14QBesV2erM=
 github.com/libs4go/errors v0.0.3 h1:5piHKdU4ECqQylqKGdDTjs/vyzZ7SQcReA7qD+E7www=
 github.com/libs4go/errors v0.0.3/go.mod h1:WLoMlTxoWMR2mXpnDHQdJnan3WXtCaFZ14QBesV2erM=
-github.com/libs4go/go-libp2p-grpc v0.0.1 h1:2s8MqF1L6Q9NaWb331ko4gcdAfGfSUSWXv2xNT7nUxk=
-github.com/libs4go/go-libp2p-grpc v0.0.1/go.mod h1:ZGsp07AmNP0CBQ7CtniuijVvIbfvyFT3KR19vIlvwZs=
-github.com/libs4go/libp2p-grpc v0.0.3 h1:Tprcx4CsMCkrZ/tddDObwwdKPEMdXhQLNYE6ThHR6Dw=
-github.com/libs4go/libp2p-grpc v0.0.3/go.mod h1:LXOYuUsT7BQoHJ5y8l7V61KPATpsJs4sy66weQdJhmg=
+github.com/libs4go/libp2p-grpc v0.0.4 h1:Kz/jWZuQJ/iryaxsp3Cf2hpHH2FhAiQ84CvENRViXCI=
+github.com/libs4go/libp2p-grpc v0.0.4/go.mod h1:75j37L5YWG3M2x/Arpx+gYOsPlknyfJ02HvY+tteQf8=
 github.com/libs4go/scf4go v0.0.1/go.mod h1:74xdNEfs//r9NmRVl1yJnmd63PZfMJfHyttRa8UOlQA=
 github.com/libs4go/scf4go v0.0.7 h1:BZdHjDecq3ccKVAlRe+GhjgF9v/VxUjeY0bbp6Trr20=
 github.com/libs4go/scf4go v0.0.7/go.mod h1:74xdNEfs//r9NmRVl1yJnmd63PZfMJfHyttRa8UOlQA=

@@ -10,7 +10,7 @@ require (
 	github.com/libp2p/go-libp2p-peerstore v0.2.6
 	github.com/libp2p/go-libp2p-tls v0.1.3
 	github.com/libs4go/errors v0.0.3
-	github.com/libs4go/libp2p-grpc v0.0.3
+	github.com/libs4go/libp2p-grpc v0.0.4
 	github.com/libs4go/scf4go v0.0.7
 	github.com/libs4go/slf4go v0.0.4
 	github.com/mmcloughlin/avo v0.0.0-20200803215136-443f81d77104 // indirect
